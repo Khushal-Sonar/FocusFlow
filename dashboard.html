@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FocusFlow | Command Center</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --bg: #0b1121;
+            --card: #1e293b;
+            --accent: #38bdf8;
+            --text: #f8fafc;
+            --muted: #94a3b8;
+            --success: #22c55e;
+        }
+        body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text); margin: 0; display: flex; height: 100vh; overflow: hidden; }
+        
+        /* Main Workspace - Padding-top adjusted for the menu button */
+        main { flex-grow: 1; padding: 100px 30px 30px 30px; overflow-y: auto; width: 100%; box-sizing: border-box; }
+        
+        /* Dashboard Grid Layout */
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .stat-card {
+            background: var(--card);
+            border-radius: 20px;
+            padding: 25px;
+            border: 1px solid #334155;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            transition: 0.3s;
+        }
+        .stat-card:hover { border-color: var(--accent); }
+
+        .full-width { grid-column: 1 / -1; }
+
+        h2 { font-size: 0.9rem; margin: 0 0 15px 0; color: var(--accent); text-transform: uppercase; letter-spacing: 1.5px; font-weight: bold; }
+        
+        /* Mini Progress Bars */
+        .mini-bar-bg { background: #0f172a; height: 10px; border-radius: 10px; margin: 15px 0; overflow: hidden; }
+        .mini-bar-fill { background: var(--accent); height: 100%; transition: 0.8s ease; width: 0%; }
+
+        /* Habit Rows */
+        .habit-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; font-size: 0.95rem; }
+        .streak-badge { background: rgba(56, 189, 248, 0.1); color: var(--accent); padding: 4px 10px; border-radius: 6px; font-weight: bold; font-size: 0.8rem; }
+
+        .big-num { font-size: 3rem; font-weight: 800; margin: 10px 0; color: var(--text); }
+        .sub-text { color: var(--muted); font-size: 0.85rem; font-weight: 500; }
+
+        .chart-container { height: 220px; width: 100%; margin-top: 10px; }
+    </style>
+</head>
+<body>
+
+<main>
+    <h1 style="margin: 0 0 40px 0; font-weight: 800; font-size: 2rem;">At a Glimpse</h1>
+
+    <div class="dashboard-grid">
+        <div class="stat-card full-width">
+            <h2>Weekly Focus Activity</h2>
+            <div class="chart-container">
+                <canvas id="miniFocusChart"></canvas>
+            </div>
+        </div>
+
+        <div class="stat-card">
+            <h2>Syllabus Progress</h2>
+            <div id="syllabus-summary"></div>
+            <div class="mini-bar-bg"><div class="mini-bar-fill" id="total-syllabus-bar"></div></div>
+            <p class="sub-text" id="syllabus-text">Gathering data...</p>
+        </div>
+
+        <div class="stat-card">
+            <h2>Today's Tasks</h2>
+            <div class="big-num" id="todo-count">0/0</div>
+            <p class="sub-text">Tasks Completed Today</p>
+            <div class="mini-bar-bg"><div class="mini-bar-fill" id="todo-bar"></div></div>
+        </div>
+
+        <div class="stat-card">
+            <h2>Top Habits</h2>
+            <div id="habit-summary" style="margin-top: 10px;">
+                </div>
+            <p class="sub-text" style="margin-top: 15px;">Keep the streaks alive!</p>
+        </div>
+
+        <div class="stat-card">
+            <h2>Total Focus Time</h2>
+            <div class="big-num" id="total-hours">0h</div>
+            <p class="sub-text">Total effort recorded this week</p>
+        </div>
+    </div>
+</main>
+
+<script src="nav.js"></script>
+
+<script>
+    function loadGlimpseData() {
+        // 1. Load Syllabus Data
+        const syllabus = JSON.parse(localStorage.getItem('eSyllabusData')) || [];
+        let totalItems = 0, doneItems = 0;
+        syllabus.forEach(s => {
+            s.chapters.forEach(c => {
+                totalItems += 4; // Lecture, Theory, Practice, PYQ
+                if(c.lecture) doneItems++; if(c.theory) doneItems++; if(c.practice) doneItems++; if(c.pyq) doneItems++;
+            });
+        });
+        const sylPercent = totalItems === 0 ? 0 : Math.round((doneItems/totalItems)*100);
+        document.getElementById('total-syllabus-bar').style.width = sylPercent + "%";
+        document.getElementById('syllabus-text').innerText = `${sylPercent}% Overall Completion`;
+
+        // 2. Load Habit Data
+        const habits = JSON.parse(localStorage.getItem('focusHabitData')) || [];
+        const habitContainer = document.getElementById('habit-summary');
+        habitContainer.innerHTML = ""; // Clear placeholder
+        if(habits.length === 0) {
+            habitContainer.innerHTML = '<p class="sub-text">No habits tracked yet.</p>';
+        } else {
+            habits.slice(0, 3).forEach(h => {
+                const row = document.createElement('div');
+                row.className = 'habit-row';
+                row.innerHTML = `<span>${h.name}</span> <span class="streak-badge">🔥 ${h.streak}d</span>`;
+                habitContainer.appendChild(row);
+            });
+        }
+
+        // 3. Load To-Do Data
+        const todos = JSON.parse(localStorage.getItem('focusTodoData')) || [];
+        const tDone = todos.filter(t => t.done).length;
+        const tTotal = todos.length;
+        const tPercent = tTotal === 0 ? 0 : Math.round((tDone/tTotal)*100);
+        document.getElementById('todo-count').innerText = `${tDone}/${tTotal}`;
+        document.getElementById('todo-bar').style.width = tPercent + "%";
+
+        // 4. Load Focus Chart Data
+        const focusStats = JSON.parse(localStorage.getItem('userFocusStats')) || { week: [0,0,0,0,0,0,0] };
+        const totalMinutes = focusStats.week.reduce((a, b) => a + b, 0);
+        document.getElementById('total-hours').innerText = (totalMinutes / 60).toFixed(1) + "h";
+
+        const ctx = document.getElementById('miniFocusChart').getContext('2d');
+        new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+                datasets: [{
+                    data: focusStats.week,
+                    borderColor: '#38bdf8',
+                    backgroundColor: 'rgba(56, 189, 248, 0.1)',
+                    borderWidth: 3,
+                    pointBackgroundColor: '#38bdf8',
+                    fill: true,
+                    tension: 0.4
+                }]
+            },
+            options: {
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: { 
+                    x: { grid: { display: false }, ticks: { color: '#94a3b8', font: { size: 10 } } },
+                    y: { display: false }
+                }
+            }
+        });
+    }
+
+    window.onload = loadGlimpseData;
+</script>
+</body>
+</html>

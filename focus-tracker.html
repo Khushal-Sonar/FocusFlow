@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FocusFlow | Productivity Trends</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root { --bg: #0b1121; --card: #1e293b; --accent: #38bdf8; --text: #f8fafc; --muted: #94a3b8; }
+        body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text); margin: 0; display: flex; min-height: 100vh; overflow-x: hidden; }
+        
+        /* Main Workspace - Adjusted for the global menu button */
+        main { flex-grow: 1; padding: 100px 20px 40px 20px; display: flex; flex-direction: column; align-items: center; width: 100%; box-sizing: border-box; }
+        
+        .container { width: 100%; max-width: 800px; }
+        .trends-card { 
+            background: var(--card); padding: 30px; border-radius: 24px; 
+            box-shadow: 0 20px 50px rgba(0,0,0,0.3); border: 1px solid #334155;
+        }
+        
+        h1 { font-size: 1.8rem; margin: 0 0 5px 0; color: var(--accent); }
+        .subtitle { color: var(--muted); margin-bottom: 25px; font-size: 0.9rem; }
+        
+        .tab-group { display: flex; gap: 10px; margin-bottom: 30px; overflow-x: auto; padding-bottom: 5px; }
+        .tab-group button { 
+            background: #0f172a; color: white; border: 1px solid #334155; 
+            padding: 10px 20px; border-radius: 10px; cursor: pointer; 
+            font-weight: 600; font-size: 0.85rem; transition: 0.3s; white-space: nowrap;
+        }
+        .tab-group button.active { background: var(--accent); color: #000; border-color: var(--accent); }
+        .tab-group button:hover:not(.active) { border-color: var(--accent); }
+
+        .chart-wrapper { height: 350px; position: relative; width: 100%; }
+        
+        /* Custom scrollbar for tab group on mobile */
+        .tab-group::-webkit-scrollbar { height: 4px; }
+        .tab-group::-webkit-scrollbar-thumb { background: #334155; border-radius: 10px; }
+    </style>
+</head>
+<body>
+
+<main>
+    <div class="container">
+        <div class="trends-card">
+            <h1>Productivity Trends</h1>
+            <p class="subtitle">Total time focused (Minutes)</p>
+            
+            <div class="tab-group">
+                <button id="btn-week" class="active" onclick="updateView('week', this)">Weekly</button>
+                <button id="btn-month" onclick="updateView('month', this)">Monthly</button>
+                <button id="btn-year" onclick="updateView('year', this)">Yearly</button>
+            </div>
+            
+            <div class="chart-wrapper">
+                <canvas id="focusChart"></canvas>
+            </div>
+        </div>
+    </div>
+</main>
+
+<script src="nav.js"></script>
+
+<script>
+    const ctx = document.getElementById('focusChart').getContext('2d');
+    const labels = {
+        week: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+        month: ['Week 1', 'Week 2', 'Week 3', 'Week 4'],
+        year: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+    };
+
+    // Load fresh data
+    let studyData = JSON.parse(localStorage.getItem('userFocusStats')) || {
+        week: [0,0,0,0,0,0,0], month: [0,0,0,0], year: [0,0,0,0,0,0,0,0,0,0,0,0]
+    };
+
+    let focusChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: labels.week,
+            datasets: [{ 
+                label: 'Minutes Focused', 
+                data: studyData.week, 
+                backgroundColor: '#38bdf8', 
+                borderRadius: 8,
+                hoverBackgroundColor: '#7dd3fc'
+            }]
+        },
+        options: {
+            responsive: true, 
+            maintainAspectRatio: false,
+            plugins: { 
+                legend: { display: false },
+                tooltip: {
+                    backgroundColor: '#1e293b',
+                    titleColor: '#38bdf8',
+                    bodyColor: '#f8fafc',
+                    borderColor: '#334155',
+                    borderWidth: 1,
+                    displayColors: false
+                }
+            },
+            scales: {
+                y: { 
+                    beginAtZero: true, 
+                    grid: { color: 'rgba(51, 65, 85, 0.5)' }, 
+                    ticks: { color: '#94a3b8', font: { family: 'Inter' } } 
+                },
+                x: { 
+                    grid: { display: false }, 
+                    ticks: { color: '#94a3b8', font: { family: 'Inter' } } 
+                }
+            }
+        }
+    });
+
+    function updateView(type, btn) {
+        // Fetch latest data in case it changed in index.html timer
+        studyData = JSON.parse(localStorage.getItem('userFocusStats')) || studyData;
+        
+        document.querySelectorAll('.tab-group button').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        
+        focusChart.data.labels = labels[type];
+        focusChart.data.datasets[0].data = studyData[type];
+        focusChart.update();
+    }
+
+    // Auto-refresh when switching back to this tab to show new timer data
+    window.onfocus = function() {
+        const currentActive = document.querySelector('.tab-group button.active').innerText.toLowerCase().replace('ly', '');
+        studyData = JSON.parse(localStorage.getItem('userFocusStats')) || studyData;
+        focusChart.data.datasets[0].data = studyData[currentActive] || studyData.week;
+        focusChart.update();
+    };
+</script>
+</body>
+</html>

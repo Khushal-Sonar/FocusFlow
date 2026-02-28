@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FocusFlow | Detailed Syllabus Tracker</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="nav.js"></script>
+    <style>
+        :root {
+            --bg: #0b1121;
+            --card: #1e293b;
+            --accent: #38bdf8;
+            --text: #f8fafc;
+            --muted: #94a3b8;
+            --danger: #ef4444;
+            --success: #22c55e;
+        }
+
+        body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text); margin: 0; display: flex; min-height: 100vh; overflow-x: hidden; }
+
+        /* Main Workspace - Adjusted for the global menu button */
+        main { flex-grow: 1; padding: 100px 20px 40px 20px; overflow-y: auto; max-width: 1000px; margin: 0 auto; width: 100%; box-sizing: border-box; }
+
+        .header-card { background: var(--card); padding: 25px; border-radius: 15px; margin-bottom: 30px; border: 1px solid #334155; }
+        .progress-info { display: flex; justify-content: space-between; margin-bottom: 10px; font-weight: bold; }
+        .bar-bg { background: #334155; height: 12px; border-radius: 10px; overflow: hidden; }
+        .bar-fill { background: var(--accent); height: 100%; width: 0%; transition: 0.6s ease; }
+
+        /* Setup Form */
+        .setup-form { background: var(--card); padding: 25px; border-radius: 15px; margin-bottom: 30px; display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px; align-items: flex-end; border: 1px solid #334155; }
+        .input-group { display: flex; flex-direction: column; gap: 8px; }
+        label { font-size: 0.75rem; color: var(--muted); text-transform: uppercase; font-weight: bold; }
+        input { background: #0f172a; border: 1px solid #334155; color: white; padding: 12px; border-radius: 8px; outline: none; transition: 0.3s; }
+        input:focus { border-color: var(--accent); }
+        .btn-create { background: var(--accent); color: #000; border: none; padding: 12px 25px; border-radius: 8px; font-weight: bold; cursor: pointer; transition: 0.3s; }
+        .btn-create:hover { opacity: 0.9; transform: scale(1.02); }
+
+        /* Subject Card */
+        .subject-card { background: var(--card); border-radius: 15px; padding: 20px; margin-bottom: 30px; border: 1px solid #334155; }
+        .sub-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 1px solid #334155; padding-bottom: 15px; }
+        
+        /* Chapter Container */
+        .chapter-box { background: rgba(15, 23, 42, 0.4); border-radius: 12px; padding: 15px; margin-bottom: 15px; border: 1px solid transparent; transition: 0.3s; }
+        .chapter-box:hover { border-color: #334155; }
+        .chapter-main { display: grid; grid-template-columns: 2fr repeat(4, 1fr) 40px; gap: 10px; align-items: center; margin-bottom: 15px; }
+        
+        /* Mobile adjust for grid */
+        @media (max-width: 768px) {
+            .chapter-main { grid-template-columns: 1fr 1fr; }
+        }
+
+        .topic-name { background: transparent; border: none; color: var(--accent); font-weight: bold; font-size: 1.1rem; width: 100%; outline: none; }
+        
+        /* Content / Topics Section */
+        .topics-list { border-top: 1px dashed #334155; padding-top: 10px; margin-top: 10px; }
+        .topic-item { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; font-size: 0.9rem; }
+        .topic-item input[type="checkbox"] { accent-color: var(--success); cursor: pointer; }
+        .add-topic-btn { background: transparent; border: 1px dashed var(--muted); color: var(--muted); cursor: pointer; padding: 8px 12px; border-radius: 8px; font-size: 0.8rem; margin-top: 5px; transition: 0.3s; }
+        .add-topic-btn:hover { color: var(--accent); border-color: var(--accent); }
+
+        .track-box { display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 0.75rem; color: var(--muted); font-weight: 500; }
+        .track-box input { width: 18px; height: 18px; accent-color: var(--accent); margin: 0; }
+        
+        .btn-del { background: none; border: none; color: var(--danger); cursor: pointer; font-size: 1.2rem; opacity: 0.6; transition: 0.3s; }
+        .btn-del:hover { opacity: 1; transform: scale(1.1); }
+    </style>
+</head>
+<body>
+
+<main>
+    <div class="header-card">
+        <div class="progress-info">
+            <span>Overall Syllabus Completion</span>
+            <span id="global-percent">0%</span>
+        </div>
+        <div class="bar-bg"><div class="bar-fill" id="global-bar"></div></div>
+    </div>
+
+    <div class="setup-form">
+        <div class="input-group">
+            <label>Subject Name</label>
+            <input type="text" id="subInput" placeholder="e.g. Mathematics">
+        </div>
+        <div class="input-group">
+            <label>Chapters Count</label>
+            <input type="number" id="chapInput" placeholder="0">
+        </div>
+        <button class="btn-create" onclick="addSubject()">Create Tracker</button>
+    </div>
+
+    <div id="syllabusList"></div>
+</main>
+
+<script>
+    let syllabusData = JSON.parse(localStorage.getItem('deepSyllabusData')) || [];
+
+    function addSubject() {
+        const name = document.getElementById('subInput').value;
+        const count = parseInt(document.getElementById('chapInput').value);
+        if (!name || isNaN(count)) return;
+
+        const subject = {
+            id: Date.now(),
+            name: name,
+            chapters: Array.from({ length: count }, (_, i) => ({
+                id: i,
+                name: `Chapter ${i + 1}`,
+                theory: false,
+                practice: false,
+                revision: false,
+                optional: false, 
+                topics: [] 
+            }))
+        };
+
+        syllabusData.push(subject);
+        document.getElementById('subInput').value = '';
+        document.getElementById('chapInput').value = '';
+        saveAndRender();
+    }
+
+    function addTopicToChapter(subId, chapId) {
+        const topicName = prompt("Enter specific topic or concept:");
+        if (!topicName) return;
+
+        const sub = syllabusData.find(s => s.id === subId);
+        const chap = sub.chapters.find(c => c.id === chapId);
+        chap.topics.push({ name: topicName, done: false });
+        saveAndRender();
+    }
+
+    function toggleTopic(subId, chapId, topicIdx) {
+        const sub = syllabusData.find(s => s.id === subId);
+        const chap = sub.chapters.find(c => c.id === chapId);
+        chap.topics[topicIdx].done = !chap.topics[topicIdx].done;
+        saveAndRender();
+    }
+
+    function toggleCheck(subId, chapId, field) {
+        const sub = syllabusData.find(s => s.id === subId);
+        const chap = sub.chapters.find(c => c.id === chapId);
+        chap[field] = !chap[field];
+        saveAndRender();
+    }
+
+    function updateChapterName(subId, chapId, value) {
+        const sub = syllabusData.find(s => s.id === subId);
+        const chap = sub.chapters.find(c => c.id === chapId);
+        chap.name = value;
+        localStorage.setItem('deepSyllabusData', JSON.stringify(syllabusData));
+    }
+
+    function deleteSubject(id) {
+        if(confirm("Delete this entire subject tracker? This cannot be undone.")) {
+            syllabusData = syllabusData.filter(s => s.id !== id);
+            saveAndRender();
+        }
+    }
+
+    function updateProgress() {
+        let total = 0;
+        let done = 0;
+
+        syllabusData.forEach(sub => {
+            sub.chapters.forEach(chap => {
+                total += 3;
+                if(chap.theory) done++;
+                if(chap.practice) done++;
+                if(chap.revision) done++;
+                
+                if(chap.optional) { total += 1; done += 1; }
+
+                chap.topics.forEach(t => {
+                    total++;
+                    if(t.done) done++;
+                });
+            });
+        });
+
+        const percent = total === 0 ? 0 : Math.round((done / total) * 100);
+        document.getElementById('global-bar').style.width = percent + '%';
+        document.getElementById('global-percent').innerText = percent + '%';
+    }
+
+    function render() {
+        const list = document.getElementById('syllabusList');
+        list.innerHTML = '';
+
+        syllabusData.forEach(sub => {
+            const card = document.createElement('div');
+            card.className = 'subject-card';
+            card.innerHTML = `
+                <div class="sub-header">
+                    <h2 style="margin:0">${sub.name}</h2>
+                    <button class="btn-del" onclick="deleteSubject(${sub.id})">×</button>
+                </div>
+            `;
+
+            sub.chapters.forEach(chap => {
+                const box = document.createElement('div');
+                box.className = 'chapter-box';
+                
+                let topicsHTML = chap.topics.map((t, i) => `
+                    <div class="topic-item">
+                        <input type="checkbox" ${t.done ? 'checked' : ''} onchange="toggleTopic(${sub.id}, ${chap.id}, ${i})">
+                        <span>${t.name}</span>
+                    </div>
+                `).join('');
+
+                box.innerHTML = `
+                    <div class="chapter-main">
+                        <input type="text" class="topic-name" value="${chap.name}" onchange="updateChapterName(${sub.id}, ${chap.id}, this.value)">
+                        <label class="track-box"><input type="checkbox" ${chap.theory ? 'checked' : ''} onchange="toggleCheck(${sub.id}, ${chap.id}, 'theory')"><span>Theory</span></label>
+                        <label class="track-box"><input type="checkbox" ${chap.practice ? 'checked' : ''} onchange="toggleCheck(${sub.id}, ${chap.id}, 'practice')"><span>Practice</span></label>
+                        <label class="track-box"><input type="checkbox" ${chap.revision ? 'checked' : ''} onchange="toggleCheck(${sub.id}, ${chap.id}, 'revision')"><span>Revision</span></label>
+                        <label class="track-box"><input type="checkbox" ${chap.optional ? 'checked' : ''} onchange="toggleCheck(${sub.id}, ${chap.id}, 'optional')"><span>Extra</span></label>
+                        <button class="btn-del" onclick="addTopicToChapter(${sub.id}, ${chap.id})" style="color:var(--accent); font-size:1.8rem">+</button>
+                    </div>
+                    <div class="topics-list">
+                        ${topicsHTML}
+                        <button class="add-topic-btn" onclick="addTopicToChapter(${sub.id}, ${chap.id})">+ Add Concept/Topic</button>
+                    </div>
+                `;
+                card.appendChild(box);
+            });
+            list.appendChild(card);
+        });
+        updateProgress();
+    }
+
+    function saveAndRender() {
+        localStorage.setItem('deepSyllabusData', JSON.stringify(syllabusData));
+        render();
+    }
+
+    render();
+</script>
+</body>
+</html>

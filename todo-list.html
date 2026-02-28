@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FocusFlow | Daily To-Do List</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="nav.js"></script>
+    <style>
+        :root {
+            --bg: #0b1121;
+            --card: #1e293b;
+            --accent: #38bdf8;
+            --text: #f8fafc;
+            --muted: #94a3b8;
+            --danger: #ef4444;
+            --success: #22c55e;
+        }
+
+        body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text); margin: 0; display: flex; min-height: 100vh; }
+
+        /* Main Workspace - Adjusted for the global menu button */
+        main { flex-grow: 1; padding: 100px 20px 40px 20px; display: flex; flex-direction: column; align-items: center; width: 100%; box-sizing: border-box; }
+
+        .todo-container { width: 100%; max-width: 500px; }
+
+        /* Percentage Header - Circular Style */
+        .todo-header-card {
+            background: var(--card);
+            padding: 25px;
+            border-radius: 20px;
+            margin-bottom: 30px;
+            display: flex;
+            align-items: center;
+            gap: 25px;
+            border: 1px solid #334155;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+
+        .stat-circle {
+            position: relative;
+            width: 80px;
+            height: 80px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+
+        .stat-circle svg {
+            width: 100%;
+            height: 100%;
+            transform: rotate(-90deg);
+        }
+
+        .stat-circle circle {
+            fill: none;
+            stroke-width: 8;
+            stroke-linecap: round;
+        }
+
+        .circle-bg { stroke: #334155; }
+        .circle-progress { 
+            stroke: var(--accent); 
+            stroke-dasharray: 226; 
+            stroke-dashoffset: 226; 
+            transition: stroke-dashoffset 0.6s ease;
+        }
+
+        .percent-text {
+            position: absolute;
+            font-size: 1.2rem;
+            font-weight: bold;
+            color: var(--text);
+        }
+
+        .header-info h2 { margin: 0; font-size: 1.4rem; color: var(--accent); }
+        .header-info p { margin: 5px 0 0; color: var(--muted); font-size: 0.9rem; }
+
+        /* Input Area */
+        .input-group { display: flex; gap: 10px; margin-bottom: 25px; }
+        input[type="text"] {
+            flex-grow: 1; background: #0f172a; border: 1px solid #334155;
+            color: white; padding: 12px 15px; border-radius: 10px; outline: none; transition: 0.3s;
+        }
+        input[type="text"]:focus { border-color: var(--accent); }
+        
+        .btn-add { background: var(--accent); color: #000; border: none; padding: 0 20px; border-radius: 10px; font-weight: bold; cursor: pointer; transition: 0.3s; }
+        .btn-add:hover { opacity: 0.9; transform: scale(1.05); }
+
+        /* List Items */
+        .list-container { display: flex; flex-direction: column; gap: 10px; }
+        .todo-item {
+            background: var(--card); padding: 15px; border-radius: 12px;
+            display: flex; align-items: center; gap: 15px; border: 1px solid transparent; transition: 0.3s;
+        }
+        .todo-item:hover { border-color: #334155; }
+        .todo-item.completed { border-left: 4px solid var(--success); background: rgba(34, 197, 94, 0.05); }
+        .todo-item.completed span { text-decoration: line-through; color: var(--muted); }
+
+        .checkbox-custom {
+            width: 22px; height: 22px; border: 2px solid var(--muted);
+            border-radius: 6px; cursor: pointer; transition: 0.2s;
+            display: flex; align-items: center; justify-content: center;
+        }
+        .todo-item.completed .checkbox-custom { border-color: var(--success); background: var(--success); }
+        .todo-item.completed .checkbox-custom::after { content: '✓'; color: white; font-size: 14px; font-weight: bold; }
+
+        .task-text { flex-grow: 1; font-size: 1rem; }
+        .del-btn { color: var(--danger); background: none; border: none; cursor: pointer; font-size: 1.2rem; opacity: 0.4; transition: 0.3s; }
+        .del-btn:hover { opacity: 1; transform: scale(1.2); }
+    </style>
+</head>
+<body>
+
+<main>
+    <div class="todo-container">
+        <div class="todo-header-card">
+            <div class="stat-circle">
+                <svg>
+                    <circle class="circle-bg" cx="40" cy="40" r="36"></circle>
+                    <circle class="circle-progress" id="progress-circle" cx="40" cy="40" r="36"></circle>
+                </svg>
+                <div class="percent-text" id="percent-val">0%</div>
+            </div>
+            <div class="header-info">
+                <h2 id="task-summary">Today's Tasks</h2>
+                <p id="motivational-msg">Plan your day, achieve your goals.</p>
+            </div>
+        </div>
+
+        <div class="input-group">
+            <input type="text" id="todoInput" placeholder="Enter a new task...">
+            <button class="btn-add" onclick="addTodo()">Add</button>
+        </div>
+
+        <div id="todoList" class="list-container"></div>
+    </div>
+</main>
+
+<script>
+    let todos = JSON.parse(localStorage.getItem('focusTodoData')) || [];
+
+    function addTodo() {
+        const input = document.getElementById('todoInput');
+        if (!input.value.trim()) return;
+
+        const newTodo = { id: Date.now(), text: input.value, done: false };
+        todos.push(newTodo);
+        input.value = '';
+        saveAndRender();
+    }
+
+    function toggleTodo(id) {
+        todos = todos.map(t => t.id === id ? { ...t, done: !t.done } : t);
+        saveAndRender();
+    }
+
+    function deleteTodo(id) {
+        if(confirm("Delete this task?")) {
+            todos = todos.filter(t => t.id !== id);
+            saveAndRender();
+        }
+    }
+
+    function updateUI() {
+        const total = todos.length;
+        const completed = todos.filter(t => t.done).length;
+        const percent = total === 0 ? 0 : Math.round((completed / total) * 100);
+
+        // Update Circular Progress
+        const circle = document.getElementById('progress-circle');
+        const offset = 226 - (226 * percent) / 100;
+        circle.style.strokeDashoffset = offset;
+
+        // Update Text
+        document.getElementById('percent-val').innerText = `${percent}%`;
+        document.getElementById('task-summary').innerText = total === 0 ? "No tasks yet" : `${completed} of ${total} tasks done`;
+        
+        // Motivational messages
+        const msg = document.getElementById('motivational-msg');
+        if (total === 0) msg.innerText = "Plan your day, achieve your goals.";
+        else if (percent === 0) msg.innerText = "Let's get started!";
+        else if (percent < 50) msg.innerText = "Good start, keep going!";
+        else if (percent < 100) msg.innerText = "Almost there!";
+        else msg.innerText = "Excellent! You've crushed it today!";
+    }
+
+    function render() {
+        const list = document.getElementById('todoList');
+        list.innerHTML = '';
+
+        todos.forEach(t => {
+            const div = document.createElement('div');
+            div.className = `todo-item ${t.done ? 'completed' : ''}`;
+            div.innerHTML = `
+                <div class="checkbox-custom" onclick="toggleTodo(${t.id})"></div>
+                <span class="task-text">${t.text}</span>
+                <button class="del-btn" onclick="deleteTodo(${t.id})">×</button>
+            `;
+            list.appendChild(div);
+        });
+        updateUI();
+    }
+
+    function saveAndRender() {
+        localStorage.setItem('focusTodoData', JSON.stringify(todos));
+        render();
+    }
+
+    document.getElementById('todoInput').addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') addTodo();
+    });
+
+    render();
+</script>
+</body>
+</html>

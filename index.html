@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FocusFlow | Student Portal</title>
+    
+    <script>
+        // Check if user is logged in before showing page content
+        if (sessionStorage.getItem('isLoggedIn') !== 'true') {
+            window.location.href = "login.html";
+        }
+    </script>
+
+    <link rel="stylesheet" href="style.css">
+    <style>
+        :root { --bg: #0b1121; --card: #1e293b; --accent: #38bdf8; --text: #f8fafc; --muted: #94a3b8; }
+        body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text); margin: 0; display: flex; overflow: hidden; height: 100vh; }
+        main { flex-grow: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative; background: var(--bg); width: 100%; }
+        .mode-toggle { font-size: 1.5rem; margin-bottom: 40px; font-weight: 300; display: flex; align-items: center; gap: 15px; color: var(--muted); }
+        .mode-toggle span.active { opacity: 1; font-weight: 600; color: var(--accent); }
+        .circle-container { width: 350px; height: 350px; border-radius: 50%; border: 10px solid #1e293b; display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative; background: radial-gradient(circle, #1e293b 0%, #0b1121 100%); }
+        .progress-ring { position: absolute; top: -10px; left: -10px; transform: rotate(-90deg); }
+        .progress-ring__circle { stroke: var(--accent); stroke-dasharray: 1099; stroke-dashoffset: 1099; transition: stroke-dashoffset 0.1s linear; }
+        .time-display { font-size: 5rem; font-weight: 800; z-index: 10; }
+        .timer-controls { margin-top: 50px; display: flex; gap: 20px; }
+        .timer-controls button { background: var(--accent); color: #000; border: none; padding: 12px 35px; border-radius: 10px; font-weight: bold; cursor: pointer; }
+        .timer-controls button.outline { background: transparent; color: white; border: 1px solid #334155; }
+    </style>
+</head>
+<body>
+
+<main>
+    <div class="mode-toggle">
+        <span id="timerMode" class="active" onclick="setMode('timer')">Timer</span> | 
+        <span id="watchMode" onclick="setMode('watch')">Stopwatch</span>
+    </div>
+    <div class="circle-container">
+        <svg class="progress-ring" width="370" height="370">
+            <circle class="progress-ring__circle" stroke-width="10" fill="transparent" r="175" cx="185" cy="185"/>
+        </svg>
+        <div class="time-display" id="time">25:00</div>
+    </div>
+    <div class="timer-controls">
+        <button id="startBtn" onclick="toggleRun()">Start</button>
+        <button class="outline" onclick="reset()">Reset</button>
+    </div>
+</main>
+
+<script src="nav.js"></script>
+<script>
+    let mode = 'timer', timeLeft = 1500, timeElapsed = 0, isRunning = false, timerInterval;
+    let sessionSeconds = 0;
+    const circle = document.querySelector('.progress-ring__circle');
+    const circumference = 175 * 2 * Math.PI;
+
+    function setMode(m) {
+        if(isRunning) saveFocusData();
+        mode = m;
+        document.getElementById('timerMode').className = m === 'timer' ? 'active' : '';
+        document.getElementById('watchMode').className = m === 'watch' ? 'active' : '';
+        reset();
+    }
+
+    function toggleRun() {
+        if (isRunning) {
+            clearInterval(timerInterval);
+            document.getElementById('startBtn').innerText = "Start";
+            saveFocusData();
+        } else {
+            timerInterval = setInterval(updateTime, 1000);
+            document.getElementById('startBtn').innerText = "Pause";
+        }
+        isRunning = !isRunning;
+    }
+
+    function updateTime() {
+        sessionSeconds++;
+        if (mode === 'timer') {
+            timeLeft--;
+            if (timeLeft <= 0) { clearInterval(timerInterval); saveFocusData(); alert("Focus complete!"); reset(); }
+        } else { timeElapsed++; }
+        display();
+        updateProgress();
+    }
+
+    function saveFocusData() {
+        if (sessionSeconds < 1) return;
+        let stats = JSON.parse(localStorage.getItem('userFocusStats')) || { week: [0, 0, 0, 0, 0, 0, 0], month: [0, 0, 0, 0], year: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] };
+        let dayIdx = new Date().getDay() - 1;
+        if (dayIdx < 0) dayIdx = 6;
+        stats.week[dayIdx] += parseFloat((sessionSeconds / 60).toFixed(2));
+        localStorage.setItem('userFocusStats', JSON.stringify(stats));
+        sessionSeconds = 0;
+    }
+
+    function display() {
+        let current = mode === 'timer' ? timeLeft : timeElapsed;
+        const mins = Math.floor(current / 60);
+        const secs = current % 60;
+        document.getElementById('time').innerText = `${mins}:${secs < 10 ? '0' : ''}${secs}`;
+    }
+
+    function updateProgress() {
+        let percent = mode === 'timer' ? (timeLeft / 1500) : (timeElapsed % 60 / 60);
+        circle.style.strokeDashoffset = circumference - (percent * circumference);
+    }
+
+    function reset() {
+        saveFocusData();
+        clearInterval(timerInterval);
+        isRunning = false; timeLeft = 1500; timeElapsed = 0; sessionSeconds = 0;
+        document.getElementById('startBtn').innerText = "Start";
+        circle.style.strokeDashoffset = circumference;
+        display();
+    }
+</script>
+</body>
+</html>
