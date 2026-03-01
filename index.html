@@ -6,7 +6,6 @@
     <title>FocusFlow | Student Portal</title>
     
     <script>
-        // Check if user is logged in before showing page content
         if (sessionStorage.getItem('isLoggedIn') !== 'true') {
             window.location.href = "login.html";
         }
@@ -17,12 +16,45 @@
         :root { --bg: #0b1121; --card: #1e293b; --accent: #38bdf8; --text: #f8fafc; --muted: #94a3b8; }
         body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text); margin: 0; display: flex; overflow: hidden; height: 100vh; }
         main { flex-grow: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative; background: var(--bg); width: 100%; }
-        .mode-toggle { font-size: 1.5rem; margin-bottom: 40px; font-weight: 300; display: flex; align-items: center; gap: 15px; color: var(--muted); }
+        
+        .mode-toggle { font-size: 1.5rem; margin-bottom: 20px; font-weight: 300; display: flex; align-items: center; gap: 15px; color: var(--muted); }
         .mode-toggle span.active { opacity: 1; font-weight: 600; color: var(--accent); }
-        .circle-container { width: 350px; height: 350px; border-radius: 50%; border: 10px solid #1e293b; display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative; background: radial-gradient(circle, #1e293b 0%, #0b1121 100%); }
-        .progress-ring { position: absolute; top: -10px; left: -10px; transform: rotate(-90deg); }
-        .progress-ring__circle { stroke: var(--accent); stroke-dasharray: 1099; stroke-dashoffset: 1099; transition: stroke-dashoffset 0.1s linear; }
-        .time-display { font-size: 5rem; font-weight: 800; z-index: 10; }
+        
+        .hint-text { font-size: 0.8rem; color: var(--muted); margin-bottom: 20px; text-transform: uppercase; letter-spacing: 1px; height: 1.2rem; }
+
+        .circle-container { 
+            width: 85vw; max-width: 350px; aspect-ratio: 1/1; border-radius: 50%; 
+            display: flex; flex-direction: column; align-items: center; justify-content: center; 
+            position: relative; background: radial-gradient(circle, #1e293b 0%, #0b1121 100%);
+            touch-action: none; 
+        }
+        
+        .progress-ring { position: absolute; top: 0; left: 0; width: 100%; height: 100%; transform: rotate(-90deg); cursor: pointer; }
+        
+        .progress-ring__circle { 
+            stroke: var(--accent); 
+            stroke-linecap: round; 
+            transition: stroke-dashoffset 0.3s ease; 
+        }
+
+        /* Speed-fix: Removes delay during drag */
+        .active-drag .progress-ring__circle, .active-drag #drag-handle {
+            transition: none !important;
+        }
+
+        #drag-handle {
+            position: absolute; width: 24px; height: 24px; background: var(--accent);
+            border-radius: 50%; border: 4px solid var(--bg); top: -2px; left: 50%;
+            transform: translate(-50%, -50%); cursor: grab; z-index: 20;
+            transition: all 0.3s ease;
+        }
+
+        /* Hides slider in Stopwatch mode */
+        .stopwatch-active #ring, .stopwatch-active #drag-handle {
+            display: none !important;
+        }
+
+        .time-display { font-size: clamp(3rem, 15vw, 5rem); font-weight: 800; z-index: 10; user-select: none; }
         .timer-controls { margin-top: 50px; display: flex; gap: 20px; }
         .timer-controls button { background: var(--accent); color: #000; border: none; padding: 12px 35px; border-radius: 10px; font-weight: bold; cursor: pointer; }
         .timer-controls button.outline { background: transparent; color: white; border: 1px solid #334155; }
@@ -35,12 +67,18 @@
         <span id="timerMode" class="active" onclick="setMode('timer')">Timer</span> | 
         <span id="watchMode" onclick="setMode('watch')">Stopwatch</span>
     </div>
-    <div class="circle-container">
-        <svg class="progress-ring" width="370" height="370">
-            <circle class="progress-ring__circle" stroke-width="10" fill="transparent" r="175" cx="185" cy="185"/>
+    
+    <!-- <div class="hint-text" id="drag-hint">10m Minimum - 3h Maximum</div>-->
+
+    <div class="circle-container" id="timer-box">
+        <svg class="progress-ring" viewBox="0 0 350 350">
+            <circle stroke="#1e293b" stroke-width="10" fill="transparent" r="160" cx="175" cy="175"/>
+            <circle id="ring" class="progress-ring__circle" stroke-width="10" fill="transparent" r="160" cx="175" cy="175" style="stroke-dasharray: 1005; stroke-dashoffset: 1005;"/>
         </svg>
-        <div class="time-display" id="time">25:00</div>
+        <div id="drag-handle"></div>
+        <div class="time-display" id="time">10:00</div>
     </div>
+
     <div class="timer-controls">
         <button id="startBtn" onclick="toggleRun()">Start</button>
         <button class="outline" onclick="reset()">Reset</button>
@@ -49,16 +87,62 @@
 
 <script src="nav.js"></script>
 <script>
-    let mode = 'timer', timeLeft = 1500, timeElapsed = 0, isRunning = false, timerInterval;
+    let mode = 'timer', timeLeft = 600, timeElapsed = 0, isRunning = false, timerInterval;
     let sessionSeconds = 0;
-    const circle = document.querySelector('.progress-ring__circle');
-    const circumference = 175 * 2 * Math.PI;
+    const maxTime = 10800, minTime = 600;
+    
+    const ring = document.getElementById('ring');
+    const handle = document.getElementById('drag-handle');
+    const container = document.getElementById('timer-box');
+    const circumference = 160 * 2 * Math.PI;
+
+    let isDragging = false, lastDegree = 0;
+
+    function handleDrag(e) {
+        if (!isDragging || isRunning || mode === 'watch') return;
+
+        container.classList.add('active-drag');
+        const rect = container.getBoundingClientRect();
+        const centerX = rect.left + rect.width / 2;
+        const centerY = rect.top + rect.height / 2;
+        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+        const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+
+        const angle = Math.atan2(clientY - centerY, clientX - centerX);
+        let degree = angle * (180 / Math.PI) + 90;
+        if (degree < 0) degree += 360;
+
+        // Rotation lock
+        if (lastDegree > 300 && degree < 60) { degree = 360; } 
+        else if (lastDegree < 60 && degree > 300) { degree = 0; }
+        lastDegree = degree;
+
+        let totalMinutes = 10 + Math.round((degree / 360) * 170);
+        timeLeft = totalMinutes * 60;
+        display();
+        updateProgress();
+    }
+
+    container.addEventListener('mousedown', () => isDragging = true);
+    container.addEventListener('touchstart', () => isDragging = true);
+    window.addEventListener('mouseup', () => { isDragging = false; container.classList.remove('active-drag'); });
+    window.addEventListener('touchend', () => { isDragging = false; container.classList.remove('active-drag'); });
+    window.addEventListener('mousemove', handleDrag);
+    window.addEventListener('touchmove', handleDrag);
 
     function setMode(m) {
         if(isRunning) saveFocusData();
         mode = m;
         document.getElementById('timerMode').className = m === 'timer' ? 'active' : '';
         document.getElementById('watchMode').className = m === 'watch' ? 'active' : '';
+        
+        if (m === 'watch') {
+            container.classList.add('stopwatch-active');
+            document.getElementById('drag-hint').style.opacity = '0';
+        } else {
+            container.classList.remove('stopwatch-active');
+            document.getElementById('drag-hint').style.opacity = '1';
+        }
         reset();
     }
 
@@ -84,12 +168,27 @@
         updateProgress();
     }
 
+    // UPDATED: Month/Year Data Recording
     function saveFocusData() {
         if (sessionSeconds < 1) return;
-        let stats = JSON.parse(localStorage.getItem('userFocusStats')) || { week: [0, 0, 0, 0, 0, 0, 0], month: [0, 0, 0, 0], year: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] };
-        let dayIdx = new Date().getDay() - 1;
-        if (dayIdx < 0) dayIdx = 6;
-        stats.week[dayIdx] += parseFloat((sessionSeconds / 60).toFixed(2));
+        let stats = JSON.parse(localStorage.getItem('userFocusStats')) || { 
+            week: [0,0,0,0,0,0,0], month: [0,0,0,0,0], year: [0,0,0,0,0,0,0,0,0,0,0,0] 
+        };
+
+        const now = new Date();
+        const mins = parseFloat((sessionSeconds / 60).toFixed(2));
+
+        let dayIdx = now.getDay() - 1; if (dayIdx < 0) dayIdx = 6;
+        stats.week[dayIdx] += mins;
+
+        const weekOfMonth = Math.floor((now.getDate() - 1) / 7);
+        if (!stats.month) stats.month = [0,0,0,0,0];
+        stats.month[weekOfMonth] += mins;
+
+        const monthIdx = now.getMonth();
+        if (!stats.year) stats.year = [0,0,0,0,0,0,0,0,0,0,0,0];
+        stats.year[monthIdx] += mins;
+
         localStorage.setItem('userFocusStats', JSON.stringify(stats));
         sessionSeconds = 0;
     }
@@ -102,18 +201,25 @@
     }
 
     function updateProgress() {
-        let percent = mode === 'timer' ? (timeLeft / 1500) : (timeElapsed % 60 / 60);
-        circle.style.strokeDashoffset = circumference - (percent * circumference);
+        if (mode === 'timer') {
+            let ratio = (timeLeft - 600) / (maxTime - 600);
+            ratio = Math.max(0, Math.min(1, ratio));
+            ring.style.strokeDashoffset = circumference - (ratio * circumference);
+            const angle = (ratio * 360) - 90;
+            const x = 50 + 46 * Math.cos(angle * Math.PI / 180);
+            const y = 50 + 46 * Math.sin(angle * Math.PI / 180);
+            handle.style.left = x + '%'; handle.style.top = y + '%';
+        }
     }
 
     function reset() {
         saveFocusData();
         clearInterval(timerInterval);
-        isRunning = false; timeLeft = 1500; timeElapsed = 0; sessionSeconds = 0;
+        isRunning = false; timeLeft = 600; timeElapsed = 0; sessionSeconds = 0; lastDegree = 0;
         document.getElementById('startBtn').innerText = "Start";
-        circle.style.strokeDashoffset = circumference;
-        display();
+        updateProgress(); display();
     }
+    window.onload = () => { display(); updateProgress(); };
 </script>
 </body>
 </html>
